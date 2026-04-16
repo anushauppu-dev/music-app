@@ -10,6 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { usePlayerStore } from '@/stores/usePlayerStore';
+import { useLibraryStore } from '@/stores/useLibraryStore';
+import { SongOptionsMenu } from '@/components/SongOptionsMenu';
 import { colors } from '@/utils/colors';
 import type { Song } from '@/types';
 
@@ -25,17 +27,35 @@ function formatTime(ms: number): string {
 // ─── NowPlayingInfo ──────────────────────────────────────────────────────────
 
 function NowPlayingInfo({ song }: { song: Song }) {
+  const isLiked = useLibraryStore((s) => s.isLiked(song.id));
+  const toggleLike = useLibraryStore((s) => s.toggleLike);
+
   return (
     <View style={infoStyles.container}>
       <View style={infoStyles.artwork}>
         <MaterialIcons name="music-note" size={80} color={colors.background} />
       </View>
-      <Text style={infoStyles.title} numberOfLines={2}>
-        {song.title}
-      </Text>
-      <Text style={infoStyles.artist} numberOfLines={1}>
-        {song.artist}
-      </Text>
+      <View style={infoStyles.titleRow}>
+        <View style={infoStyles.titleText}>
+          <Text style={infoStyles.title} numberOfLines={2}>
+            {song.title}
+          </Text>
+          <Text style={infoStyles.artist} numberOfLines={1}>
+            {song.artist}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => toggleLike(song.id)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={infoStyles.likeButton}
+        >
+          <MaterialIcons
+            name={isLiked ? 'favorite' : 'favorite-border'}
+            size={28}
+            color={isLiked ? '#e74c3c' : colors.icon}
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -55,16 +75,28 @@ const infoStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    gap: 12,
+  },
+  titleText: {
+    flex: 1,
+  },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'center',
   },
   artist: {
     fontSize: 16,
     color: colors.icon,
-    textAlign: 'center',
+    marginTop: 4,
+  },
+  likeButton: {
+    padding: 4,
+    flexShrink: 0,
   },
 });
 
@@ -115,7 +147,7 @@ function SeekBar({
           setDisplayProgress(ratio);
         }
       },
-    })
+    }),
   ).current;
 
   const fillPercent = `${(displayProgress * 100).toFixed(1)}%`;
@@ -124,18 +156,11 @@ function SeekBar({
     <View style={seekStyles.container}>
       <View
         style={seekStyles.track}
-        onLayout={(e) => {
-          barWidth.current = e.nativeEvent.layout.width;
-        }}
+        onLayout={(e) => { barWidth.current = e.nativeEvent.layout.width; }}
         {...panResponder.panHandlers}
       >
         <View style={[seekStyles.fill, { width: fillPercent as `${number}%` }]} />
-        <View
-          style={[
-            seekStyles.thumb,
-            { left: fillPercent as `${number}%` },
-          ]}
-        />
+        <View style={[seekStyles.thumb, { left: fillPercent as `${number}%` }]} />
       </View>
       <View style={seekStyles.labels}>
         <Text style={seekStyles.time}>{formatTime(position)}</Text>
@@ -196,10 +221,7 @@ function PlaybackControls() {
         <MaterialIcons name="skip-previous" size={44} color={colors.text} />
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={ctrlStyles.playButton}
-        onPress={togglePlayPause}
-      >
+      <TouchableOpacity style={ctrlStyles.playButton} onPress={togglePlayPause}>
         <MaterialIcons
           name={isPlaying ? 'pause' : 'play-arrow'}
           size={40}
@@ -240,25 +262,13 @@ export default function ModalScreen() {
   const duration = usePlayerStore((s) => s.duration);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
   const shuffle = usePlayerStore((s) => s.shuffle);
-  const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
+  const cycleRepeatMode = usePlayerStore((s) => s.cycleRepeatMode);
   const setShuffle = usePlayerStore((s) => s.setShuffle);
   const seek = usePlayerStore((s) => s.seek);
 
-  const handleSeek = useCallback(
-    (ms: number) => {
-      seek(ms);
-    },
-    [seek]
-  );
+  const [optionsVisible, setOptionsVisible] = useState(false);
 
-  const cycleRepeat = useCallback(() => {
-    const next: Record<typeof repeatMode, typeof repeatMode> = {
-      off: 'all',
-      all: 'one',
-      one: 'off',
-    };
-    setRepeatMode(next[repeatMode]);
-  }, [repeatMode, setRepeatMode]);
+  const handleSeek = useCallback((ms: number) => { seek(ms); }, [seek]);
 
   if (!currentSong) {
     return (
@@ -271,8 +281,7 @@ export default function ModalScreen() {
     );
   }
 
-  const repeatIconName =
-    repeatMode === 'one' ? 'repeat-one' : 'repeat';
+  const repeatIconName = repeatMode === 'one' ? 'repeat-one' : 'repeat';
   const repeatActive = repeatMode !== 'off';
 
   return (
@@ -285,7 +294,7 @@ export default function ModalScreen() {
         <PlaybackControls />
 
         <View style={styles.extras}>
-          <TouchableOpacity onPress={cycleRepeat} style={styles.extraButton}>
+          <TouchableOpacity onPress={cycleRepeatMode} style={styles.extraButton}>
             <MaterialIcons
               name={repeatIconName}
               size={26}
@@ -303,8 +312,21 @@ export default function ModalScreen() {
               color={shuffle ? colors.tint : colors.icon}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setOptionsVisible(true)}
+            style={styles.extraButton}
+          >
+            <MaterialIcons name="more-horiz" size={26} color={colors.icon} />
+          </TouchableOpacity>
         </View>
       </View>
+
+      <SongOptionsMenu
+        song={currentSong}
+        visible={optionsVisible}
+        onClose={() => setOptionsVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -322,8 +344,9 @@ const styles = StyleSheet.create({
   },
   extras: {
     flexDirection: 'row',
-    gap: 48,
+    gap: 32,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   extraButton: {
     padding: 8,
