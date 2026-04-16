@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePlayerStore } from '@/stores/usePlayerStore';
 import { pickSongsFromFiles } from '@/services/discoveryService';
+import { SongListItem } from '@/components/SongListItem';
+import { SongOptionsMenu } from '@/components/SongOptionsMenu';
 import { colors } from '@/utils/colors';
 import type { Song } from '@/types';
 
@@ -23,35 +25,6 @@ const SORT_LABELS: Record<SortMode, string> = {
   artist: 'By Artist',
   duration: 'By Duration',
 };
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function SongRow({
-  song,
-  onPress,
-}: {
-  song: Song;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.songRow} onPress={onPress}>
-      <View style={styles.songInfo}>
-        <Text style={styles.songTitle} numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text style={styles.songArtist} numberOfLines={1}>
-          {song.artist}
-        </Text>
-      </View>
-      <Text style={styles.songDuration}>{formatDuration(song.duration)}</Text>
-    </TouchableOpacity>
-  );
-}
 
 export default function SongsScreen() {
   const {
@@ -67,6 +40,7 @@ export default function SongsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('az');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [optionsSong, setOptionsSong] = useState<Song | null>(null);
 
   const handlePickFiles = useCallback(async () => {
     setIsLoadingSongs(true);
@@ -92,7 +66,7 @@ export default function SongsScreen() {
       ? songs.filter(
           (s) =>
             s.title.toLowerCase().includes(q) ||
-            s.artist.toLowerCase().includes(q)
+            s.artist.toLowerCase().includes(q),
         )
       : songs;
 
@@ -114,7 +88,7 @@ export default function SongsScreen() {
     (index: number) => {
       setQueue(filteredAndSorted, index);
     },
-    [filteredAndSorted, setQueue]
+    [filteredAndSorted, setQueue],
   );
 
   if (isLoadingSongs) {
@@ -224,7 +198,11 @@ export default function SongsScreen() {
         data={filteredAndSorted}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <SongRow song={item} onPress={() => handleSongPress(index)} />
+          <SongListItem
+            song={item}
+            onPress={() => handleSongPress(index)}
+            onOptionsPress={setOptionsSong}
+          />
         )}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
@@ -232,6 +210,12 @@ export default function SongsScreen() {
             <Text style={styles.emptyText}>No results</Text>
           </View>
         }
+      />
+
+      <SongOptionsMenu
+        song={optionsSong}
+        visible={!!optionsSong}
+        onClose={() => setOptionsSong(null)}
       />
     </SafeAreaView>
   );
@@ -354,32 +338,6 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: 160,
-  },
-  songRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.icon,
-  },
-  songInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  songTitle: {
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  songArtist: {
-    fontSize: 13,
-    color: colors.icon,
-    marginTop: 2,
-  },
-  songDuration: {
-    fontSize: 13,
-    color: colors.icon,
   },
   emptyIcon: {
     fontSize: 64,
