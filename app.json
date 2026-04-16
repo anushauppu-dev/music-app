@@ -11,12 +11,11 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to find music files.",
-        "NSAppleMusicUsageDescription": "This app needs access to Apple Music to play your songs.",
         "UIBackgroundModes": [
-          "audio",
           "audio"
-        ]
+        ],
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "UIFileSharingEnabled": true
       },
       "bundleIdentifier": "com.anonymous.musicapp"
     },
@@ -31,8 +30,6 @@
       "predictiveBackGestureEnabled": false,
       "useNextNotificationsApi": true,
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "package": "com.anonymous.musicapp"

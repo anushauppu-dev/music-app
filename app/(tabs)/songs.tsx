@@ -1,15 +1,9 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PermissionDeniedView } from '@/components/PermissionDeniedView';
 import { usePlayerStore } from '@/stores/usePlayerStore';
-import { fetchAllSongs } from '@/services/discoveryService';
-import {
-  getMediaPermission,
-  openSettings,
-  requestMediaPermission,
-} from '@/services/permissionService';
+import { pickSongsFromFiles } from '@/services/discoveryService';
 import { colors } from '@/utils/colors';
 import type { Song } from '@/types';
 
@@ -39,68 +33,30 @@ function SongRow({ song }: { song: Song }) {
 export default function SongsScreen() {
   const {
     songs,
-    permissionStatus,
     isLoadingSongs,
     songsError,
     setSongs,
-    setPermissionStatus,
     setIsLoadingSongs,
     setSongsError,
   } = usePlayerStore();
 
-  const loadSongs = useCallback(async () => {
-    const status = await getMediaPermission();
-    setPermissionStatus(status);
-
-    if (status !== 'granted') return;
-
+  const handlePickFiles = useCallback(async () => {
     setIsLoadingSongs(true);
     setSongsError(null);
 
     try {
-      const fetchedSongs = await fetchAllSongs();
-      setSongs(fetchedSongs);
+      const picked = await pickSongsFromFiles();
+      if (picked !== null) {
+        const existingUris = new Set(songs.map((s) => s.uri));
+        const newSongs = picked.filter((s) => !existingUris.has(s.uri));
+        setSongs([...songs, ...newSongs]);
+      }
     } catch (err) {
       setSongsError(err instanceof Error ? err.message : 'Failed to load songs');
     } finally {
       setIsLoadingSongs(false);
     }
-  }, [setSongs, setPermissionStatus, setIsLoadingSongs, setSongsError]);
-
-  useEffect(() => {
-    loadSongs();
-  }, [loadSongs]);
-
-  const handleRequestPermission = async () => {
-    const status = await requestMediaPermission();
-    setPermissionStatus(status);
-    if (status === 'granted') {
-      loadSongs();
-    }
-  };
-
-  const handleOpenSettings = () => {
-    openSettings();
-  };
-
-  if (permissionStatus !== 'granted') {
-    if (isLoadingSongs) {
-      return (
-        <SafeAreaView style={styles.container}>
-          <ActivityIndicator size="large" color={colors.tint} />
-        </SafeAreaView>
-      );
-    }
-    return (
-      <SafeAreaView style={styles.container}>
-        <PermissionDeniedView
-          status={permissionStatus === 'blocked' ? 'blocked' : 'denied'}
-          onRequestPermission={handleRequestPermission}
-          onOpenSettings={handleOpenSettings}
-        />
-      </SafeAreaView>
-    );
-  }
+  }, [songs, setSongs, setIsLoadingSongs, setSongsError]);
 
   if (isLoadingSongs) {
     return (
@@ -115,8 +71,8 @@ export default function SongsScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Text style={styles.errorText}>{songsError}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadSongs}>
-            <Text style={styles.retryText}>Retry</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handlePickFiles}>
+            <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -128,10 +84,13 @@ export default function SongsScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Text style={styles.emptyIcon}>🎵</Text>
-          <Text style={styles.emptyText}>No songs found</Text>
+          <Text style={styles.emptyText}>No songs yet</Text>
           <Text style={styles.emptySubtext}>
-            Add music to your device to see them here
+            Tap below to pick music files from your device
           </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handlePickFiles}>
+            <Text style={styles.retryText}>Pick Music Files</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -141,14 +100,17 @@ export default function SongsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Songs</Text>
-        <Text style={styles.headerCount}>{songs.length} songs</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerCount}>{songs.length} songs</Text>
+          <TouchableOpacity style={styles.addButton} onPress={handlePickFiles}>
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <FlatList
         data={songs}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <SongRow song={item} />}
-        refreshing={isLoadingSongs}
-        onRefresh={loadSongs}
         contentContainerStyle={styles.list}
       />
     </SafeAreaView>
@@ -178,10 +140,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
   headerCount: {
     fontSize: 14,
     color: colors.icon,
-    marginTop: 2,
+  },
+  addButton: {
+    backgroundColor: colors.tint,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  addButtonText: {
+    color: colors.background,
+    fontSize: 13,
+    fontWeight: '600',
   },
   list: {
     paddingBottom: 100,
