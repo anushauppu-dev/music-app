@@ -1,11 +1,28 @@
-import { useCallback } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePlayerStore } from '@/stores/usePlayerStore';
 import { pickSongsFromFiles } from '@/services/discoveryService';
 import { colors } from '@/utils/colors';
 import type { Song } from '@/types';
+
+type SortMode = 'az' | 'za' | 'artist' | 'duration';
+
+const SORT_LABELS: Record<SortMode, string> = {
+  az: 'A – Z',
+  za: 'Z – A',
+  artist: 'By Artist',
+  duration: 'By Duration',
+};
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -14,9 +31,15 @@ function formatDuration(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function SongRow({ song }: { song: Song }) {
+function SongRow({
+  song,
+  onPress,
+}: {
+  song: Song;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={styles.songRow} onPress={() => {}}>
+    <TouchableOpacity style={styles.songRow} onPress={onPress}>
       <View style={styles.songInfo}>
         <Text style={styles.songTitle} numberOfLines={1}>
           {song.title}
@@ -38,7 +61,12 @@ export default function SongsScreen() {
     setSongs,
     setIsLoadingSongs,
     setSongsError,
+    setQueue,
   } = usePlayerStore();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('az');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const handlePickFiles = useCallback(async () => {
     setIsLoadingSongs(true);
@@ -58,6 +86,37 @@ export default function SongsScreen() {
     }
   }, [songs, setSongs, setIsLoadingSongs, setSongsError]);
 
+  const filteredAndSorted = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? songs.filter(
+          (s) =>
+            s.title.toLowerCase().includes(q) ||
+            s.artist.toLowerCase().includes(q)
+        )
+      : songs;
+
+    return [...filtered].sort((a, b) => {
+      switch (sortMode) {
+        case 'az':
+          return a.title.localeCompare(b.title);
+        case 'za':
+          return b.title.localeCompare(a.title);
+        case 'artist':
+          return a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title);
+        case 'duration':
+          return a.duration - b.duration;
+      }
+    });
+  }, [songs, searchQuery, sortMode]);
+
+  const handleSongPress = useCallback(
+    (index: number) => {
+      setQueue(filteredAndSorted, index);
+    },
+    [filteredAndSorted, setQueue]
+  );
+
   if (isLoadingSongs) {
     return (
       <SafeAreaView style={styles.container}>
@@ -71,8 +130,8 @@ export default function SongsScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Text style={styles.errorText}>{songsError}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handlePickFiles}>
-            <Text style={styles.retryText}>Try Again</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handlePickFiles}>
+            <Text style={styles.primaryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -88,8 +147,8 @@ export default function SongsScreen() {
           <Text style={styles.emptySubtext}>
             Tap below to pick music files from your device
           </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handlePickFiles}>
-            <Text style={styles.retryText}>Pick Music Files</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handlePickFiles}>
+            <Text style={styles.primaryButtonText}>Pick Music Files</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -98,6 +157,7 @@ export default function SongsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Songs</Text>
         <View style={styles.headerRight}>
@@ -107,11 +167,71 @@ export default function SongsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Search + Sort toolbar */}
+      <View style={styles.toolbar}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search songs…"
+            placeholderTextColor={colors.icon}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            clearButtonMode="never"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={() => setShowSortMenu((v) => !v)}
+        >
+          <Text style={styles.sortButtonText}>⇅ {SORT_LABELS[sortMode]}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Sort dropdown */}
+      {showSortMenu && (
+        <View style={styles.sortMenu}>
+          {(Object.keys(SORT_LABELS) as SortMode[]).map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.sortMenuItem, sortMode === mode && styles.sortMenuItemActive]}
+              onPress={() => {
+                setSortMode(mode);
+                setShowSortMenu(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.sortMenuItemText,
+                  sortMode === mode && styles.sortMenuItemTextActive,
+                ]}
+              >
+                {SORT_LABELS[mode]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <FlatList
-        data={songs}
+        data={filteredAndSorted}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <SongRow song={item} />}
+        renderItem={({ item, index }) => (
+          <SongRow song={item} onPress={() => handleSongPress(index)} />
+        )}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>No results</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -161,8 +281,79 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.icon,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a2d2e',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 36,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  clearButtonText: {
+    color: colors.icon,
+    fontSize: 12,
+  },
+  sortButton: {
+    backgroundColor: '#2a2d2e',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  sortButtonText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  sortMenu: {
+    position: 'absolute',
+    right: 12,
+    top: 120,
+    backgroundColor: '#2a2d2e',
+    borderRadius: 10,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 140,
+  },
+  sortMenuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sortMenuItemActive: {
+    backgroundColor: '#3a3d3e',
+  },
+  sortMenuItemText: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  sortMenuItemTextActive: {
+    color: colors.tint,
+    fontWeight: '600',
+  },
   list: {
-    paddingBottom: 100,
+    paddingBottom: 160,
   },
   songRow: {
     flexDirection: 'row',
@@ -209,14 +400,14 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     textAlign: 'center',
   },
-  retryButton: {
+  primaryButton: {
     marginTop: 12,
     backgroundColor: colors.tint,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,
   },
-  retryText: {
+  primaryButtonText: {
     color: colors.background,
     fontSize: 14,
     fontWeight: '600',
