@@ -3,31 +3,33 @@ import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { colors } from '@/utils/colors';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: colors.tabIconSelected,
         headerShown: false,
         tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: colors.icon,
+        },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="songs"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Songs',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="music.note.list" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="library"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Library',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="music.note.house" color={color} />,
         }}
       />
     </Tabs>
